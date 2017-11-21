@@ -31,4 +31,5 @@ repositories {
 
 dependencies {
     compile 'com.facebook.react:react-native:0.14.+'
+    compile 'com.google.code.gson:gson:2.8.2'
 }

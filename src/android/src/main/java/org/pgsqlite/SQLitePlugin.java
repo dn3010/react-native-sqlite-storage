@@ -15,12 +15,17 @@ import android.database.sqlite.SQLiteStatement;
 import android.content.Context;
 import android.util.Base64;
 
+import com.google.gson.Gson;
+
 import java.io.Closeable;
 import java.io.File;
 import java.io.FileInputStream;
 import java.lang.IllegalArgumentException;
 import java.lang.Number;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
@@ -35,8 +40,6 @@ import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
 import com.facebook.react.bridge.ReadableMap;
-import com.facebook.react.bridge.WritableArray;
-import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.bridge.Callback;
 
 import org.json.JSONException;
@@ -608,12 +611,12 @@ public class SQLitePlugin extends ReactContextBaseJavaModule {
         String query;
         String query_id;
         int len = queryarr.length;
-        WritableArray batchResults = Arguments.createArray();
+        ArrayList<Map> batchResults = new ArrayList<>();
 
         for (int i = 0; i < len; i++) {
             query_id = queryIDs[i];
 
-            WritableMap queryResult = null;
+            Map queryResult = null;
             String errorMessage = "unknown";
 
             try {
@@ -646,8 +649,8 @@ public class SQLitePlugin extends ReactContextBaseJavaModule {
                     }
 
                     if (rowsAffected != -1) {
-                        queryResult = Arguments.createMap();
-                        queryResult.putInt("rowsAffected", rowsAffected);
+                        queryResult = new HashMap();
+                        queryResult.put("rowsAffected", rowsAffected);
                     }
                 }
 
@@ -665,12 +668,12 @@ public class SQLitePlugin extends ReactContextBaseJavaModule {
                         insertId = myStatement.executeInsert();
 
                         // statement has finished with no constraint violation:
-                        queryResult = Arguments.createMap();
+                        queryResult = new HashMap();
                         if (insertId != -1) {
-                            queryResult.putDouble("insertId", insertId);
-                            queryResult.putInt("rowsAffected", 1);
+                            queryResult.put("insertId", insertId);
+                            queryResult.put("rowsAffected", 1);
                         } else {
-                            queryResult.putInt("rowsAffected", 0);
+                            queryResult.put("rowsAffected", 0);
                         }
                     } catch (SQLiteException ex) {
                         // report error result with the error message
@@ -687,8 +690,8 @@ public class SQLitePlugin extends ReactContextBaseJavaModule {
                     try {
                         mydb.beginTransaction();
 
-                        queryResult = Arguments.createMap();
-                        queryResult.putInt("rowsAffected", 0);
+                        queryResult = new HashMap();
+                        queryResult.put("rowsAffected", 0);
                     } catch (SQLiteException ex) {
                         errorMessage = ex.getMessage();
                         FLog.e(TAG, "SQLiteDatabase.beginTransaction() failed", ex);
@@ -701,8 +704,8 @@ public class SQLitePlugin extends ReactContextBaseJavaModule {
                         mydb.setTransactionSuccessful();
                         mydb.endTransaction();
 
-                        queryResult = Arguments.createMap();
-                        queryResult.putInt("rowsAffected", 0);
+                        queryResult = new HashMap();
+                        queryResult.put("rowsAffected", 0);
                     } catch (SQLiteException ex) {
                         errorMessage = ex.getMessage();
                         FLog.e(TAG, "SQLiteDatabase.setTransactionSuccessful/endTransaction() failed", ex);
@@ -714,8 +717,8 @@ public class SQLitePlugin extends ReactContextBaseJavaModule {
                     try {
                         mydb.endTransaction();
 
-                        queryResult = Arguments.createMap();
-                        queryResult.putInt("rowsAffected", 0);
+                        queryResult = new HashMap();
+                        queryResult.put("rowsAffected", 0);
                     } catch (SQLiteException ex) {
                         errorMessage = ex.getMessage();
                         FLog.e(TAG, "SQLiteDatabase.endTransaction() failed", ex);
@@ -732,27 +735,27 @@ public class SQLitePlugin extends ReactContextBaseJavaModule {
             }
 
             if (queryResult != null) {
-                WritableMap r = Arguments.createMap();
-                r.putString("qid", query_id);
+                Map r = new HashMap();
+                r.put("qid", query_id);
 
-                r.putString("type", "success");
-                r.putMap("result", queryResult);
+                r.put("type", "success");
+                r.put("result", queryResult);
 
-                batchResults.pushMap(r);
+                batchResults.add(r);
             } else {
-                WritableMap r = Arguments.createMap();
-                r.putString("qid", query_id);
-                r.putString("type", "error");
+                Map r = new HashMap();
+                r.put("qid", query_id);
+                r.put("type", "error");
 
-                WritableMap er = Arguments.createMap();
-                er.putString("message", errorMessage);
-                r.putMap("result", er);
+                Map er = new HashMap();
+                er.put("message", errorMessage);
+                r.put("result", er);
 
-                batchResults.pushMap(r);
+                batchResults.add(r);
             }
         }
 
-        cbc.success(batchResults);
+        cbc.success(new Gson().toJson(batchResults).toString());
     }
 
     private QueryType getQueryType(String query) {
@@ -791,10 +794,11 @@ public class SQLitePlugin extends ReactContextBaseJavaModule {
      *
      * @return results in string form
      */
-    private WritableMap executeSqlStatementQuery(SQLiteDatabase mydb,
+    private Map executeSqlStatementQuery(SQLiteDatabase mydb,
                                                 String query, JSONArray paramsAsJson,
                                                 CallbackContext cbc) throws Exception {
-        WritableMap rowsResult = Arguments.createMap();
+        Map rowsResult = new HashMap();
+
 
         Cursor cur = null;
         try {
@@ -819,22 +823,23 @@ public class SQLitePlugin extends ReactContextBaseJavaModule {
 
             // If query result has rows
             if (cur != null && cur.moveToFirst()) {
-                WritableArray rowsArrayResult = Arguments.createArray();
+                ArrayList<Map> rowsArrayResult = new ArrayList<>();
                 String key;
                 int colCount = cur.getColumnCount();
 
                 // Build up JSON result object for each row
                 do {
-                    WritableMap row = Arguments.createMap();
+                    Map row = new HashMap();
+
                     for (int i = 0; i < colCount; ++i) {
                         key = cur.getColumnName(i);
                         bindRow(row, key, cur, i);
                     }
 
-                    rowsArrayResult.pushMap(row);
+                    rowsArrayResult.add(row);
                 } while (cur.moveToNext());
 
-                rowsResult.putArray("rows", rowsArrayResult);
+                rowsResult.put("rows", rowsArrayResult);
             }
         } finally {
             closeQuietly(cur);
@@ -844,25 +849,25 @@ public class SQLitePlugin extends ReactContextBaseJavaModule {
     }
 
     @SuppressLint("NewApi")
-    private void bindRow(WritableMap row, String key, Cursor cur, int i) {
+    private void bindRow(Map row, String key, Cursor cur, int i) {
         int curType = cur.getType(i);
 
         switch (curType) {
             case Cursor.FIELD_TYPE_NULL:
-                row.putNull(key);
+                row.put(key, null);
                 break;
             case Cursor.FIELD_TYPE_INTEGER:
-                row.putInt(key, cur.getInt(i));
+                row.put(key, cur.getInt(i));
                 break;
             case Cursor.FIELD_TYPE_FLOAT:
-                row.putDouble(key, cur.getDouble(i));
+                row.put(key, cur.getDouble(i));
                 break;
             case Cursor.FIELD_TYPE_BLOB:
-                row.putString(key, new String(Base64.encode(cur.getBlob(i), Base64.DEFAULT)));
+                row.put(key, new String(Base64.encode(cur.getBlob(i), Base64.DEFAULT)));
                 break;
             case Cursor.FIELD_TYPE_STRING:
             default: /* (not expected) */
-                row.putString(key, cur.getString(i));
+                row.put(key, cur.getString(i));
                 break;
         }
     }
